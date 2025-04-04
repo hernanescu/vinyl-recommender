@@ -1,0 +1,33 @@
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Variables de entorno
+.env
+
+# Archivos Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de log
+*.log
+app.log
+
+# Directorios de datos personales
+data/
+
+# SQLite local
+*.db
+*.sqlite
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Directorios específicos de IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace 

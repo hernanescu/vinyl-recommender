@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Colección - Recomendador de Vinilos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Actualizar Mi Colección de Vinilos</h1>
+            <p>Sube tu archivo CSV exportado desde Discogs</p>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                {% if error %}
+                <div class="alert error">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                {% if success %}
+                <div class="alert success">
+                    {{ success }}
+                    <p>Tu colección ha sido actualizada correctamente.</p>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="/upload" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="file">Selecciona tu archivo CSV</label>
+                        <input type="file" name="file" id="file" accept=".csv" required>
+                        <p class="help-text">El archivo debe ser un CSV exportado desde Discogs con tu colección de vinilos.</p>
+                    </div>
+
+                    <button type="submit" class="btn">Subir Colección</button>
+                </form>
+
+                <div class="instructions">
+                    <h3>¿Cómo exportar tu colección desde Discogs?</h3>
+                    <ol>
+                        <li>Inicia sesión en tu cuenta de Discogs</li>
+                        <li>Ve a tu colección</li>
+                        <li>Haz clic en "Exportar"</li>
+                        <li>Selecciona el formato CSV</li>
+                        <li>Descarga el archivo y súbelo aquí</li>
+                    </ol>
+                </div>
+            </section>
+
+            <div class="actions">
+                <a href="/" class="btn secondary">Volver al Recomendador</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>Creado con ❤️ para mejorar la experiencia musical en casa</p>
+        </footer>
+    </div>
+</body>
+</html> 

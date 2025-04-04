@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recomendador de Vinilos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Mi Recomendador de Vinilos</h1>
+            <p>Descubre qué vinilo de tu colección escuchar basado en tu estado de ánimo</p>
+        </header>
+
+        <main>
+            {% if error %}
+            <div class="alert error">
+                <strong>Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+            <section class="form-section">
+                <form method="POST" action="/">
+                    <div class="form-group">
+                        <label for="mood">¿Cómo te sientes hoy?</label>
+                        <select name="mood" id="mood" required>
+                            <option value="">Selecciona tu estado de ánimo</option>
+                            <option value="Feliz">Feliz</option>
+                            <option value="Energético">Energético</option>
+                            <option value="Melancólico">Melancólico</option>
+                            <option value="Relajado">Relajado</option>
+                            <option value="Concentrado">Concentrado</option>
+                            <option value="Romántico">Romántico</option>
+                            <option value="Nostálgico">Nostálgico</option>
+                            <option value="Introspectivo">Introspectivo</option>
+                            <option value="Festivo">Festivo</option>
+                            <option value="Pensativo">Pensativo</option>
+                            <option value="Motivado">Motivado</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="interests">¿Qué te interesa hoy?</label>
+                        <div class="interests-help">
+                            <p>Puedes incluir:</p>
+                            <ul class="interests-suggestions">
+                                <li>Géneros (rock, jazz, clásica...)</li>
+                                <li>Décadas (años 70s, 80s, 90s...)</li>
+                                <li>Instrumentos (piano, guitarras, percusión...)</li>
+                                <li>Actividades (trabajar, relajarse, ejercicio...)</li>
+                                <li>O simplemente tu estado actual (reunión familiar, cita, etc.)</li>
+                            </ul>
+                        </div>
+                        <textarea name="interests" id="interests" rows="3" placeholder="Ej: Jazz suave para tomar un café, ritmos latinos mientras cocino, algo instrumental para concentrarme..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn">Recomendar Vinilo</button>
+                </form>
+            </section>
+
+            {% if recommendation %}
+            <section class="recommendation-section">
+                <h2>Tu recomendación personalizada</h2>
+                <div class="recommendation-result" id="recommendation-content">
+                    <!-- El contenido se renderizará con JavaScript -->
+                </div>
+            </section>
+
+            <script>
+                // Contenido de la recomendación desde Flask
+                const recommendationContent = `{{ recommendation | safe }}`;
+                
+                // Renderizar el markdown como HTML
+                document.getElementById('recommendation-content').innerHTML = 
+                    marked.parse(recommendationContent);
+            </script>
+            {% endif %}
+
+            <div class="actions">
+                <a href="/upload" class="btn secondary">Actualizar mi colección de vinilos</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>Creado con ❤️ para mejorar la experiencia musical en casa</p>
+        </footer>
+    </div>
+</body>
+</html> 
