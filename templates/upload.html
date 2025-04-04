@@ -3,61 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subir Colección - Recomendador de Vinilos</title>
+    <title>Subir Colección CSV</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Actualizar Mi Colección de Vinilos</h1>
-            <p>Sube tu archivo CSV exportado desde Discogs</p>
+            <h1>Recomendador de Vinilos</h1>
+            <nav>
+                <a href="{{ url_for('main.index') }}">Inicio</a>
+                <a href="{{ url_for('collection.upload_csv') }}" class="active">Subir CSV</a>
+                <a href="{{ url_for('collection.get_user_collection') }}">Usuario de Discogs</a>
+                <a href="{{ url_for('collection.enrich_data') }}">Enriquecer Datos</a>
+            </nav>
         </header>
 
         <main>
-            <section class="upload-section">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <p>{{ message }}</p>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <section class="content">
+                <h2>Subir tu colección en CSV</h2>
+                
+                <p>
+                    Sube el archivo CSV de tu colección de Discogs para obtener recomendaciones personalizadas.
+                </p>
+
+                <div class="info-box">
+                    <h3>Cómo obtener tu CSV de Discogs:</h3>
+                    <ol>
+                        <li>Inicia sesión en tu cuenta de <a href="https://www.discogs.com" target="_blank">Discogs</a></li>
+                        <li>Ve a tu colección</li>
+                        <li>Haz clic en "Exportar"</li>
+                        <li>Selecciona el formato CSV</li>
+                        <li>Descarga el archivo</li>
+                        <li>Súbelo aquí</li>
+                    </ol>
+                </div>
+
                 {% if error %}
-                <div class="alert error">
-                    {{ error }}
+                <div class="alert alert-error">
+                    <p>{{ error }}</p>
                 </div>
                 {% endif %}
 
                 {% if success %}
-                <div class="alert success">
-                    {{ success }}
-                    <p>Tu colección ha sido actualizada correctamente.</p>
+                <div class="alert alert-success">
+                    <p>{{ success }}</p>
+                    <p class="mt-3">
+                        <a href="{{ url_for('main.index') }}" class="btn primary">Ir a la página principal</a>
+                        <a href="{{ url_for('collection.enrich_data') }}" class="btn secondary">Enriquecer colección</a>
+                    </p>
                 </div>
-                {% endif %}
-
-                <form method="POST" action="/upload" enctype="multipart/form-data">
+                {% else %}
+                <form action="{{ url_for('collection.upload_csv') }}" method="post" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label for="file">Selecciona tu archivo CSV</label>
-                        <input type="file" name="file" id="file" accept=".csv" required>
-                        <p class="help-text">El archivo debe ser un CSV exportado desde Discogs con tu colección de vinilos.</p>
+                        <label for="file">Archivo CSV:</label>
+                        <input type="file" id="file" name="file" accept=".csv" required>
+                        <div class="form-help">Solo se aceptan archivos CSV de Discogs</div>
                     </div>
 
-                    <button type="submit" class="btn">Subir Colección</button>
+                    <div class="form-group">
+                        <label for="enrich">¿Enriquecer automáticamente?</label>
+                        <select id="enrich" name="enrich">
+                            <option value="no">No</option>
+                            <option value="yes">Sí, enriquecer con datos de Discogs</option>
+                        </select>
+                        <div class="form-help">
+                            Si seleccionas "Sí", se usará la API de Discogs para obtener datos adicionales 
+                            como años originales, valoraciones y listas de canciones (puede tomar tiempo).
+                        </div>
+                    </div>
+
+                    <div class="form-group actions">
+                        <button type="submit" class="btn primary">Subir Archivo</button>
+                        <a href="{{ url_for('main.index') }}" class="btn secondary">Cancelar</a>
+                    </div>
                 </form>
-
-                <div class="instructions">
-                    <h3>¿Cómo exportar tu colección desde Discogs?</h3>
-                    <ol>
-                        <li>Inicia sesión en tu cuenta de Discogs</li>
-                        <li>Ve a tu colección</li>
-                        <li>Haz clic en "Exportar"</li>
-                        <li>Selecciona el formato CSV</li>
-                        <li>Descarga el archivo y súbelo aquí</li>
-                    </ol>
-                </div>
+                {% endif %}
             </section>
-
-            <div class="actions">
-                <a href="/" class="btn secondary">Volver al Recomendador</a>
-            </div>
         </main>
 
         <footer>
-            <p>Creado con ❤️ para mejorar la experiencia musical en casa</p>
+            <p>Recomendador de Vinilos &copy; 2023</p>
         </footer>
     </div>
 </body>

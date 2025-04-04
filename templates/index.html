@@ -7,86 +7,150 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .password-field {
+            position: relative;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: #6c757d;
+        }
+        .collection-status {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 5px solid #28a745;
+        }
+        .no-collection {
+            border-left: 5px solid #dc3545;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Mi Recomendador de Vinilos</h1>
-            <p>Descubre qué vinilo de tu colección escuchar basado en tu estado de ánimo</p>
+            <h1>Recomendador de Vinilos</h1>
+            <nav>
+                <a href="{{ url_for('main.index') }}" class="active">Inicio</a>
+                <a href="{{ url_for('collection.upload_csv') }}">Subir CSV</a>
+                <a href="{{ url_for('collection.get_user_collection') }}">Usuario de Discogs</a>
+                <a href="{{ url_for('collection.enrich_data') }}">Enriquecer Datos</a>
+            </nav>
         </header>
 
         <main>
-            {% if error %}
-            <div class="alert error">
-                <strong>Error:</strong> {{ error }}
-            </div>
-            {% endif %}
-
-            <section class="form-section">
-                <form method="POST" action="/">
-                    <div class="form-group">
-                        <label for="mood">¿Cómo te sientes hoy?</label>
-                        <select name="mood" id="mood" required>
-                            <option value="">Selecciona tu estado de ánimo</option>
-                            <option value="Feliz">Feliz</option>
-                            <option value="Energético">Energético</option>
-                            <option value="Melancólico">Melancólico</option>
-                            <option value="Relajado">Relajado</option>
-                            <option value="Concentrado">Concentrado</option>
-                            <option value="Romántico">Romántico</option>
-                            <option value="Nostálgico">Nostálgico</option>
-                            <option value="Introspectivo">Introspectivo</option>
-                            <option value="Festivo">Festivo</option>
-                            <option value="Pensativo">Pensativo</option>
-                            <option value="Motivado">Motivado</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="interests">¿Qué te interesa hoy?</label>
-                        <div class="interests-help">
-                            <p>Puedes incluir:</p>
-                            <ul class="interests-suggestions">
-                                <li>Géneros (rock, jazz, clásica...)</li>
-                                <li>Décadas (años 70s, 80s, 90s...)</li>
-                                <li>Instrumentos (piano, guitarras, percusión...)</li>
-                                <li>Actividades (trabajar, relajarse, ejercicio...)</li>
-                                <li>O simplemente tu estado actual (reunión familiar, cita, etc.)</li>
-                            </ul>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <p>{{ message }}</p>
                         </div>
-                        <textarea name="interests" id="interests" rows="3" placeholder="Ej: Jazz suave para tomar un café, ritmos latinos mientras cocino, algo instrumental para concentrarme..."></textarea>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <section class="content">
+                <h2>Obtén recomendaciones personalizadas de tu colección</h2>
+                
+                {% if collection_loaded %}
+                <section class="collection-status">
+                    <h3>Estado de tu colección</h3>
+                    {% if username %}
+                    <p>Colección cargada para el usuario: <strong>{{ username }}</strong></p>
+                    <p class="collection-path">Archivo: {{ collection_path }}</p>
+                    {% else %}
+                    <p>Colección cargada correctamente.</p>
+                    <p class="collection-path">Archivo: {{ collection_path }}</p>
+                    {% endif %}
+                    <div class="actions">
+                        <a href="{{ url_for('collection.upload_csv') }}" class="btn secondary">Cambiar colección</a>
+                        <a href="{{ url_for('collection.enrich_data') }}" class="btn secondary">Enriquecer datos</a>
+                    </div>
+                </section>
+                {% else %}
+                <div class="collection-status no-collection">
+                    <strong>¡No tienes una colección cargada!</strong>
+                    <p>Para obtener recomendaciones personalizadas, primero debes:</p>
+                    <ul>
+                        <li><a href="{{ url_for('collection.get_user_collection') }}">Ingresar tu usuario de Discogs</a>, o</li>
+                        <li><a href="{{ url_for('collection.upload_csv') }}">Subir un archivo CSV</a> con tu colección de vinilos</li>
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if error %}
+                <div class="alert alert-error">
+                    <p>{{ error }}</p>
+                </div>
+                {% endif %}
+
+                <form method="post" action="{{ url_for('main.index') }}">
+                    <div class="form-group">
+                        <label for="mood">¿Cuál es tu estado de ánimo hoy?</label>
+                        <input type="text" id="mood" name="mood" placeholder="Ej: Energético, relajado, nostálgico..." required>
+                        <div class="form-help">Describe cómo te sientes en este momento</div>
                     </div>
 
-                    <button type="submit" class="btn">Recomendar Vinilo</button>
+                    <div class="form-group">
+                        <label for="interests">¿Qué te interesa escuchar?</label>
+                        <textarea id="interests" name="interests" placeholder="Ej: Rock de los 70s, jazz con piano, música para programar..." rows="3" required></textarea>
+                        <div class="form-help">Describe tus intereses musicales actuales, géneros, épocas o situaciones</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="openai_key">API Key de OpenAI (opcional):</label>
+                        <div class="password-field">
+                            <input type="password" id="openai_key" name="openai_key" placeholder="Tu clave de API de OpenAI">
+                            <button type="button" class="toggle-password" onclick="togglePassword('openai_key')">Mostrar</button>
+                        </div>
+                        <div class="form-help">
+                            <p>Si proporcionas tu propia API key de OpenAI, se utilizará para generar esta recomendación sin usar nuestros créditos.</p>
+                            <p>Tu API key no se almacena en nuestros servidores y se usa solo para esta solicitud.</p>
+                            <p><a href="https://platform.openai.com/api-keys" target="_blank">Obtener una API key de OpenAI</a></p>
+                        </div>
+                    </div>
+
+                    <div class="form-group actions">
+                        <button type="submit" class="btn primary">¡Recomiéndame música!</button>
+                    </div>
                 </form>
-            </section>
 
-            {% if recommendation %}
-            <section class="recommendation-section">
-                <h2>Tu recomendación personalizada</h2>
-                <div class="recommendation-result" id="recommendation-content">
-                    <!-- El contenido se renderizará con JavaScript -->
+                {% if recommendation %}
+                <div class="recommendation">
+                    <h3>Tu recomendación personalizada</h3>
+                    <div class="markdown">
+                        {{ recommendation | safe }}
+                    </div>
                 </div>
+                {% endif %}
             </section>
-
-            <script>
-                // Contenido de la recomendación desde Flask
-                const recommendationContent = `{{ recommendation | safe }}`;
-                
-                // Renderizar el markdown como HTML
-                document.getElementById('recommendation-content').innerHTML = 
-                    marked.parse(recommendationContent);
-            </script>
-            {% endif %}
-
-            <div class="actions">
-                <a href="/upload" class="btn secondary">Actualizar mi colección de vinilos</a>
-            </div>
         </main>
 
         <footer>
             <p>Creado con ❤️ para mejorar la experiencia musical en casa</p>
         </footer>
     </div>
+
+    <script>
+        function togglePassword(id) {
+            const field = document.getElementById(id);
+            const button = field.nextElementSibling;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.textContent = 'Ocultar';
+            } else {
+                field.type = 'password';
+                button.textContent = 'Mostrar';
+            }
+        }
+    </script>
 </body>
 </html> 

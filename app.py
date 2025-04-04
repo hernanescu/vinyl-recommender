@@ -1,9 +1,10 @@
 import os
 import logging
 import pandas as pd
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import openai
 from dotenv import load_dotenv
+import discogs_api
 
 # Configurar logging
 logging.basicConfig(
@@ -16,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Cargar variables de entorno (.env)
+# Cargar variables de entorno
 load_dotenv()
 
 # Configurar OpenAI API
@@ -26,15 +27,27 @@ if not api_key:
 else:
     logger.info("API Key de OpenAI configurada correctamente")
     
-# Inicializar cliente de OpenAI (versión más reciente)
-# Cambiando esta línea para evitar el error de 'proxies'
+# Inicializar cliente de OpenAI con la forma compatible
 openai.api_key = api_key
 
+# Inicializar la aplicación Flask
 app = Flask(__name__)
 
-# Cargar datos de vinilos desde CSV
-def load_vinyl_data(csv_path):
+# Rutas de archivos
+COLLECTION_CSV_PATH = 'data/vinyl_collection.csv'
+ENRICHED_COLLECTION_PATH = 'data/enriched_collection.csv'
+
+# Cargar datos de vinilos desde CSV (básico o enriquecido)
+def load_vinyl_data(csv_path, use_enriched=True):
     try:
+        # Verificar si existe una versión enriquecida primero
+        if use_enriched and os.path.exists(ENRICHED_COLLECTION_PATH):
+            logger.info(f"Cargando colección enriquecida desde {ENRICHED_COLLECTION_PATH}")
+            df = pd.read_csv(ENRICHED_COLLECTION_PATH)
+            logger.info(f"Se cargaron {len(df)} registros de vinilos enriquecidos")
+            return df
+            
+        # Si no hay enriquecida o no se quiere usar, cargar la normal
         if not os.path.exists(csv_path):
             logger.error(f"El archivo {csv_path} no existe")
             return None
@@ -59,7 +72,8 @@ def process_vinyl_data(vinyl_data):
             'Artist', 'Title', 'Label', 'Genre', 'Style', 
             'Released', 'Format', 'Rating', 'CollectionFolder',
             'Collection Media Condition', 'Collection Sleeve Condition',
-            'Collection Notes'
+            'Collection Notes', 'original_release_year', 'community_rating',
+            'tracklist', 'image_url', 'release_id'
         ]
         
         # Filtrar para usar solo las columnas disponibles
@@ -94,6 +108,15 @@ def process_vinyl_data(vinyl_data):
             # Obtener la década
             processed_data['Decade'] = processed_data['Year'].apply(
                 lambda x: f"{x[0:3]}0s" if pd.notna(x) and len(str(x)) == 4 else "Desconocida"
+            )
+        
+        # Usar el año original de lanzamiento si está disponible
+        if 'original_release_year' in processed_data.columns:
+            # Reemplazar el año con el año original si está disponible
+            processed_data['Original_Year'] = processed_data['original_release_year']
+            # Obtener la década original
+            processed_data['Original_Decade'] = processed_data['Original_Year'].apply(
+                lambda x: f"{str(x)[0:3]}0s" if pd.notna(x) and len(str(x)) == 4 else "Desconocida"
             )
         
         # Procesar géneros para mejor categorización
@@ -138,20 +161,27 @@ def get_recommendation(vinyl_data, mood, interests):
             title = v.get('Title', 'Unknown Title')
             
             # Extraer información adicional cuando esté disponible
-            year = v.get('Year', v.get('Released', ''))
-            decade = v.get('Decade', '')
+            year = v.get('Original_Year', v.get('Year', v.get('Released', '')))
+            original_year = v.get('original_release_year', None)
+            decade = v.get('Original_Decade', v.get('Decade', ''))
             genre = v.get('Genre_Clean', v.get('Genre', ''))
             style = v.get('Style_Clean', v.get('Style', ''))
             label = v.get('Label', '')
             format_type = v.get('Format_Type', v.get('Format', ''))
             condition = v.get('Media_Condition', '')
+            community_rating = v.get('community_rating', '')
+            
+            # Incluir tracklist si está disponible (solo para los primeros 20 vinilos para no sobrecargar el prompt)
+            tracklist = v.get('tracklist', '') if i < 20 else ''
             
             # Construir entrada con información más rica
             entry = f"{i+1}. '{artist}' - '{title}'"
             
             # Agregar detalles relevantes
             details = []
-            if year:
+            if original_year:
+                details.append(f"año original: {original_year}")
+            elif year:
                 details.append(f"año: {year}")
             if genre:
                 details.append(f"género: {genre}")
@@ -166,13 +196,18 @@ def get_recommendation(vinyl_data, mood, interests):
             if details:
                 entry += f" ({', '.join(details)})"
                 
+            # Agregar tracklist si está disponible
+            if tracklist:
+                entry += f"\n     Canciones: {tracklist}"
+                
             vinyl_summary.append(entry)
         
         # Crear prompt para OpenAI con información enriquecida
         prompt = f"""
-        Como experto en música, quiero que recomiendes álbumes de mi colección personal de vinilos.
+        Sos un experto en música, simpático e influyente. Dominás conocimiento sobre música, cultura, psicología y entendimiento general.
+        Quiero que me recomiendes discos de mi colección personal de vinilos.
         
-        Mi colección incluye {len(vinyl_summary)} vinilos, aquí un detalle de cada uno:
+        Mi colección incluye {len(vinyl_summary)} vinilos, y te envío acá un detalle de cada uno:
         
         {vinyl_summary}
         
@@ -180,26 +215,31 @@ def get_recommendation(vinyl_data, mood, interests):
         - Mi estado de ánimo actual es: {mood}
         - Mis intereses actuales son: {interests}
         
-        Por favor, recomiéndame exactamente 3 álbumes de esta colección que sean adecuados para mi situación.
+        Por favor, recomendame exactamente 3 álbumes de esta colección que sean adecuados para mi situación. Hacé un mensaje de 100 palabras máximo, y ponele onda.
+        
+        IMPORTANTE: Es OBLIGATORIO usar el año ORIGINAL de lanzamiento del álbum, nunca uses el año de la edición.
+        Por ejemplo, si Led Zeppelin IV se lanzó originalmente en 1971 pero mi copia es de 2022, siempre debes presentar el álbum como de 1971.
         
         En tu recomendación, ten en cuenta aspectos como:
         - El género y estilo musical y su relación con mi estado de ánimo
         - La época o década de lanzamiento si es relevante para mis intereses
-        - Características especiales del álbum (instrumentación, temática, etc.)
+        - Características especiales del álbum (instrumentación, temática, canciones específicas, etc.)
         - La relación del artista o álbum con mis intereses expresados
+        
+        NO menciones puntajes ni valoraciones numéricas en tus recomendaciones.
         
         Formatea tu respuesta usando Markdown con el siguiente formato:
         
         ## Recomendaciones para tu momento {mood}
         
-        ### 1. [Nombre del artista] - [Título del álbum] ([año])
+        ### 1. [Nombre del artista] - [Título del álbum] ([año ORIGINAL])
         **Por qué es una buena elección:** Explicación detallada que mencione el género, estilo, 
         características del álbum y por qué encaja con mi estado de ánimo e intereses actuales...
         
-        ### 2. [Nombre del artista] - [Título del álbum] ([año])
+        ### 2. [Nombre del artista] - [Título del álbum] ([año ORIGINAL])
         **Por qué es una buena elección:** Explicación detallada...
         
-        ### 3. [Nombre del artista] - [Título del álbum] ([año])
+        ### 3. [Nombre del artista] - [Título del álbum] ([año ORIGINAL])
         **Por qué es una buena elección:** Explicación detallada...
         
         #### ¡Disfruta tu música!
@@ -213,7 +253,7 @@ def get_recommendation(vinyl_data, mood, interests):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Eres un experto en música con amplio conocimiento de géneros, artistas, sellos discográficos y épocas musicales. Tus recomendaciones están bien fundamentadas y formateadas con markdown."},
+                {"role": "system", "content": "Eres un experto en música con amplio conocimiento de géneros, artistas, sellos discográficos y épocas musicales. Tus recomendaciones están bien fundamentadas y formateadas con markdown. IMPORTANTE: Siempre usas el año ORIGINAL de lanzamiento de los discos, no el año de la edición particular."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -240,7 +280,7 @@ def index():
             logger.info(f"Solicitud de recomendación recibida. Mood: {mood}, Intereses: {interests}")
             
             # Cargar datos de vinilos
-            vinyl_data = load_vinyl_data('data/vinyl_collection.csv')
+            vinyl_data = load_vinyl_data(COLLECTION_CSV_PATH)
             
             if vinyl_data is not None:
                 # Obtener recomendación
@@ -264,7 +304,7 @@ def api_recommend():
         
         logger.info(f"API: Solicitud de recomendación. Mood: {mood}, Intereses: {interests}")
         
-        vinyl_data = load_vinyl_data('data/vinyl_collection.csv')
+        vinyl_data = load_vinyl_data(COLLECTION_CSV_PATH)
         
         if vinyl_data is None:
             logger.error("API: No se pudo cargar la colección de vinilos")
@@ -276,7 +316,7 @@ def api_recommend():
         logger.error(f"Error en API: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-# Ruta para subir archivo CSV (opcional)
+# Ruta para subir archivo CSV
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_csv():
     error = None
@@ -308,6 +348,13 @@ def upload_csv():
                         df = pd.read_csv(file_path)
                         logger.info(f"Archivo CSV subido y validado: {len(df)} registros")
                         success = f"Archivo subido correctamente. Se cargaron {len(df)} registros."
+                        
+                        # Verificar si se quiere enriquecer los datos
+                        enrich = request.form.get('enrich') == 'yes'
+                        if enrich:
+                            logger.info("Iniciando proceso de enriquecimiento con Discogs API")
+                            success += " Enriquecimiento en proceso..."
+                            return redirect(url_for('enrich_data'))
                     except Exception as e:
                         os.remove(file_path)  # Eliminar archivo inválido
                         error = f"El archivo no es un CSV válido: {str(e)}"
@@ -317,6 +364,39 @@ def upload_csv():
             logger.error(f"Error en subida de archivo: {e}", exc_info=True)
     
     return render_template('upload.html', error=error, success=success)
+
+# Ruta para enriquecer datos con Discogs API
+@app.route('/enrich', methods=['GET'])
+def enrich_data():
+    error = None
+    success = None
+    
+    try:
+        if not os.path.exists(COLLECTION_CSV_PATH):
+            error = "No se encontró el archivo CSV de la colección. Por favor, sube un archivo primero."
+            logger.error(error)
+        else:
+            # Iniciar el proceso de enriquecimiento
+            logger.info("Iniciando proceso de enriquecimiento desde la interfaz web")
+            
+            # Enriquecer los datos (en background para no bloquear la interfaz sería lo ideal)
+            # Pero para simplicidad, lo hacemos sincrónicamente
+            enriched_df = discogs_api.enrich_collection_from_file(
+                COLLECTION_CSV_PATH, 
+                ENRICHED_COLLECTION_PATH
+            )
+            
+            if enriched_df is not None and len(enriched_df) > 0:
+                success = f"¡Enriquecimiento completado! Se enriquecieron {len(enriched_df)} registros."
+                logger.info(f"Enriquecimiento completado para {len(enriched_df)} registros")
+            else:
+                error = "No se pudo enriquecer la colección. Verifica el log para más detalles."
+                logger.error("Fallo en el proceso de enriquecimiento")
+    except Exception as e:
+        error = f"Error durante el enriquecimiento: {str(e)}"
+        logger.error(f"Error en proceso de enriquecimiento: {e}", exc_info=True)
+    
+    return render_template('enrich.html', error=error, success=success)
 
 if __name__ == '__main__':
     logger.info("Iniciando aplicación")

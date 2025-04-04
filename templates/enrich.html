@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enriquecer Colección</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .password-field {
+            position: relative;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Recomendador de Vinilos</h1>
+            <nav>
+                <a href="{{ url_for('main.index') }}">Inicio</a>
+                <a href="{{ url_for('collection.upload_csv') }}">Subir CSV</a>
+                <a href="{{ url_for('collection.get_user_collection') }}">Usuario de Discogs</a>
+                <a href="{{ url_for('collection.enrich_data') }}" class="active">Enriquecer Datos</a>
+            </nav>
+        </header>
+
+        <main>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <p>{{ message }}</p>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <section class="content">
+                <h2>Enriquecer tu colección con Discogs</h2>
+                
+                <p>
+                    Enriquece tu colección con datos adicionales de Discogs, como años originales de lanzamiento, 
+                    valoraciones de la comunidad y listas de canciones. Este proceso puede tomar varios minutos.
+                </p>
+
+                {% if error %}
+                <div class="alert alert-error">
+                    <p>{{ error }}</p>
+                </div>
+                {% endif %}
+
+                {% if success %}
+                <div class="alert alert-success">
+                    <p>{{ success }}</p>
+                    <p class="mt-3">
+                        <a href="{{ url_for('main.index') }}" class="btn primary">Ir a la página principal</a>
+                    </p>
+                </div>
+                {% else %}
+                <form action="{{ url_for('collection.enrich_data') }}" method="post">
+                    <div class="form-group">
+                        <label for="token">Token de API de Discogs (opcional):</label>
+                        <div class="password-field">
+                            <input type="password" id="token" name="token" placeholder="Token de la API de Discogs">
+                            <button type="button" class="toggle-password" onclick="togglePassword('token')">Mostrar</button>
+                        </div>
+                        <div class="form-help">
+                            Si tienes un token de API de Discogs, puedes proporcionarlo para obtener más detalles.
+                            <a href="https://www.discogs.com/settings/developers" target="_blank">Obtener un token</a>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="custom_output">Nombre de archivo personalizado (opcional):</label>
+                        <input type="text" id="custom_output" name="custom_output" placeholder="mi_coleccion_enriquecida.csv">
+                        <div class="form-help">Si lo deseas, puedes especificar un nombre personalizado para el archivo enriquecido</div>
+                    </div>
+
+                    <div class="form-group actions">
+                        <button type="submit" class="btn primary">Enriquecer Colección</button>
+                        <a href="{{ url_for('main.index') }}" class="btn secondary">Cancelar</a>
+                    </div>
+                </form>
+                {% endif %}
+            </section>
+        </main>
+
+        <footer>
+            <p>Recomendador de Vinilos &copy; 2023</p>
+        </footer>
+    </div>
+
+    <script>
+        function togglePassword(id) {
+            const field = document.getElementById(id);
+            const button = field.nextElementSibling;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.textContent = 'Ocultar';
+            } else {
+                field.type = 'password';
+                button.textContent = 'Mostrar';
+            }
+        }
+    </script>
+</body>
+</html> 
